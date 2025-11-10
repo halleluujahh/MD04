@@ -8,10 +8,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.expression.ExpressionException;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Component;
 import org.com.session06.security.UserPrinciple;
 
 import java.util.Date;
+import java.util.List;
+import java.util.stream.Collectors;
+
 @Component
 public class JwtProvider {
 
@@ -27,8 +31,13 @@ public class JwtProvider {
         // tạo thời gian sống của token
         Date dateExpiration = new Date(new Date().getTime() + EXPIRED);
 
+        List<String> roles = userPrinciple.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.toList());
+
         return Jwts.builder()
                 .setSubject(userPrinciple.getUsername())
+                .claim("roles", roles)
                 .signWith(SignatureAlgorithm.HS512,SECRET_KEY)
                 .setExpiration(dateExpiration)
                 .compact();
@@ -36,7 +45,7 @@ public class JwtProvider {
 
     public Boolean validateToken(String token){
         try {
-            Jwts.parser().setSigningKey(SECRET_KEY).parseClaimsJwt(token);
+            Jwts.parser().setSigningKey(SECRET_KEY).parseClaimsJws(token);
             return true;
         }catch (ExpressionException | SignatureException | MalformedJwtException exception) {
             logger.error(exception.getMessage());
@@ -47,7 +56,7 @@ public class JwtProvider {
     public String getUserNameFromToken(String token){
         return Jwts.parser()
                 .setSigningKey(SECRET_KEY)
-                .parseClaimsJwt(token)
+                .parseClaimsJws(token)
                 .getBody()
                 .getSubject();
     }

@@ -15,6 +15,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.com.session06.security.jwt.JwtEntryPoint;
+import org.springframework.web.cors.CorsConfiguration;
+
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -25,25 +28,43 @@ public class SecurityConfig {
     private JwtAuthTokenFilter jwtAuthTokenFilter;
     @Autowired
     private JwtEntryPoint jwtEntryPoint;
+
     @Bean
     SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
-        return httpSecurity.csrf(AbstractHttpConfigurer::disable).
+        return httpSecurity
+                .cors(cf->cf.configurationSource(request ->
+                {
+                    CorsConfiguration corsConfiguration = new CorsConfiguration();
+                    corsConfiguration.setAllowCredentials(true);
+                    corsConfiguration.setAllowedOrigins(List.of("http://localhost:5173"));
+                    corsConfiguration.setAllowedMethods(List.of("*"));
+                    corsConfiguration.setAllowedHeaders(List.of("*"));
+                    corsConfiguration.setExposedHeaders(List.of("*"));
+                    return corsConfiguration;
+                })
+                )
+                .csrf(AbstractHttpConfigurer::disable).
                 authenticationProvider(authenticationProvider()).
-                authorizeHttpRequests((auth)->{
-                    auth.requestMatchers("/api/v1/auth/**").permitAll()
-                            .requestMatchers("/api/v1/admin").hasAnyAuthority("ADMIN")
-                            .anyRequest().authenticated();
-                }).sessionManagement((auth)->auth.sessionCreationPolicy(SessionCreationPolicy.STATELESS)).
-                exceptionHandling(auth->auth.authenticationEntryPoint(jwtEntryPoint)).
+                authorizeHttpRequests((auth) -> {
+                    auth.requestMatchers("/api/v1/auth/**", "/api/v1/category/**", "/api/v1/product/**").permitAll();
+                    auth.requestMatchers("/api/v1/admin/**").hasAuthority("ADMIN");
+                    auth.requestMatchers( "/api/v1/cart/**", "/api/v1/user/**", "/api/v1/payment/**", "/api/v1/order/**").hasAuthority("USER");
+                    auth.anyRequest().authenticated();
+                }).sessionManagement((auth) -> auth.sessionCreationPolicy(SessionCreationPolicy.STATELESS)).
+                exceptionHandling((auth) ->
+                {
+                    auth.authenticationEntryPoint(jwtEntryPoint);
+                }).
                 addFilterBefore(jwtAuthTokenFilter, UsernamePasswordAuthenticationFilter.class).build();
     }
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
     @Bean
-    AuthenticationProvider authenticationProvider(){
+    AuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider();
         authenticationProvider.setUserDetailsService(userDetailService);
         authenticationProvider.setPasswordEncoder(passwordEncoder());
